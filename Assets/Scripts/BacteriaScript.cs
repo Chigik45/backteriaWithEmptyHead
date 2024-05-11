@@ -23,6 +23,7 @@ public class BacteriaScript : MonoBehaviour
     public int generation = 0;
     public float poison = 0;
     public Stats stats = new Stats();
+    public float hybernation = 0f;
 
     public struct Stats
     {
@@ -48,15 +49,15 @@ public class BacteriaScript : MonoBehaviour
             switch (preset)
             {
                 case BacteriaPreset.rotating:
-                    receptors.Add(new Receptor(1, 2, ReceptorType.foodNear, 1, false));
+                    receptors.Add(new Receptor(1, 2, ReceptorType.plantNear, 1, false));
                     receptors.Add(new Receptor(4, 2, ReceptorType.foodFullness, 1, false));
                     actions.Add(new Action(1.5f, 2, ActionType.eat, false));
-                    actions.Add(new Action(3.6f, 2, ActionType.split, false));
+                    actions.Add(new Action(3.5f, 2, ActionType.split, false));
 
                     receptors.Add(new Receptor(2, 4, ReceptorType.leftRightRandom, 1, false));
-                    actions.Add(new Action(1.25f, 4, ActionType.move, false));
+                    actions.Add(new Action(1.2f, 4, ActionType.move, false));
                     actions.Add(new Action(1.5f, 4, ActionType.rotateLeft, false));
-                    actions.Add(new Action(2.75f, 4, ActionType.move, false));
+                    actions.Add(new Action(2.8f, 4, ActionType.move, false));
                     actions.Add(new Action(2.5f, 4, ActionType.rotateRight, false));
                     break;
             }
@@ -76,16 +77,44 @@ public class BacteriaScript : MonoBehaviour
     }
     public void Step()
     {
-        foodLevel -= Time.deltaTime * hungerGlobalSpeed;
-        timeToLiveActual -= Time.deltaTime;
+        foodLevel -= IsHybernated() ? Time.deltaTime * hungerGlobalSpeed / 2 : Time.deltaTime * hungerGlobalSpeed;
+        timeToLiveActual -= IsHybernated() ? 0.1f * Time.deltaTime : Time.deltaTime;
         if (poison >= 0)
             poison -= Time.deltaTime;
         if (foodLevel <= 0 || timeToLiveActual <= 0)
         {
+            FoodMarker fm = Instantiate(foodPrefab, transform.position, Quaternion.identity).GetComponent<FoodMarker>();
+            fm.ChangeSource(FoodSource.meat);
+            fm.nutrients = Mathf.Clamp(foodLevel, 5, foodMax);
             Destroy(gameObject);
             return;
         }
         foodLevel = Mathf.Clamp(foodLevel, 0, foodMax);
+        if (hybernation <= 0)
+            ProcessMind();
+        else
+            hybernation -= Time.deltaTime;
+        transform.position = new Vector3(Mathf.Clamp(transform.position.x, -9, 9), Mathf.Clamp(transform.position.y, -2.5f, 5), 0);
+        for (int i = 0; i < tied.Count; ++i)
+        {
+            if (tied[i] == null)
+            {
+                tied.RemoveAt(i--);
+                continue;
+            }
+            if (Vector2.Distance(transform.position, tied[i].transform.position) > 0.5f)
+            {
+                tied[i].transform.position += (transform.position - tied[i].transform.position); // + (transform.position - tied[i].transform.position).normalized * 0.5f;
+            }
+        }
+    }
+    bool IsHybernated()
+    {
+        return hybernation > 0;
+    }
+
+    void ProcessMind()
+    {
         HashSet<Action> affected = new HashSet<Action>();
         HashSet<Action> deactivated = new HashSet<Action>();
         foreach (var el in receptors)
@@ -153,7 +182,7 @@ public class BacteriaScript : MonoBehaviour
                                     deactivated.Add(act);
                             }
                         }
-                    break;
+                        break;
                     case ReceptorType.edgeNear:
                         {
                             float eff = 0;
@@ -216,6 +245,8 @@ public class BacteriaScript : MonoBehaviour
                             int whichSide = 0;
                             foreach (var foods in FoodMarker.foodScripts)
                             {
+                                if (foods.source != FoodSource.plant)
+                                    continue;
                                 if (foods != this && Vector2.Distance(transform.position, foods.gameObject.transform.position) < 2 &&
                                     Mathf.Clamp(1 / Vector2.Distance(transform.position, foods.gameObject.transform.position), 0, 1) > eff)
                                 {
@@ -261,7 +292,7 @@ public class BacteriaScript : MonoBehaviour
                                     deactivated.Add(act);
                             }
                         }
-                    break;
+                        break;
                     case ReceptorType.wait5:
                         {
                             if (distBefteenActAndRec <= el.sensivity)
@@ -308,10 +339,76 @@ public class BacteriaScript : MonoBehaviour
                                     deactivated.Add(act);
                             }
                         }
-                    break;
+                        break;
+                    case ReceptorType.plantNear:
+                        {
+                            float eff = 0;
+                            foreach (var food in FoodMarker.foodScripts)
+                            {
+                                if (food.source != FoodSource.plant)
+                                    continue;
+                                if (Vector2.Distance(transform.position, food.gameObject.transform.position) < 2 &&
+                                    Mathf.Clamp(1 / Vector2.Distance(transform.position, food.gameObject.transform.position), 0, 1) > eff)
+                                {
+                                    eff = Mathf.Clamp(1 / Vector2.Distance(transform.position, food.gameObject.transform.position), 0, 1);
+                                }
+                            }
+                            if (distBefteenActAndRec <= el.sensivity * eff)
+                            {
+                                if (!el.isDeactivator)
+                                    affected.Add(act);
+                                else
+                                    deactivated.Add(act);
+                            }
+                        }
+                        break;
+                    case ReceptorType.meatNear:
+                        {
+                            float eff = 0;
+                            foreach (var food in FoodMarker.foodScripts)
+                            {
+                                if (food.source != FoodSource.meat)
+                                    continue;
+                                if (Vector2.Distance(transform.position, food.gameObject.transform.position) < 2 &&
+                                    Mathf.Clamp(1 / Vector2.Distance(transform.position, food.gameObject.transform.position), 0, 1) > eff)
+                                {
+                                    eff = Mathf.Clamp(1 / Vector2.Distance(transform.position, food.gameObject.transform.position), 0, 1);
+                                }
+                            }
+                            if (distBefteenActAndRec <= el.sensivity * eff)
+                            {
+                                if (!el.isDeactivator)
+                                    affected.Add(act);
+                                else
+                                    deactivated.Add(act);
+                            }
+                        }
+                        break;
+                    case ReceptorType.rotNear:
+                        {
+                            float eff = 0;
+                            foreach (var food in FoodMarker.foodScripts)
+                            {
+                                if (food.source != FoodSource.rot)
+                                    continue;
+                                if (Vector2.Distance(transform.position, food.gameObject.transform.position) < 2 &&
+                                    Mathf.Clamp(1 / Vector2.Distance(transform.position, food.gameObject.transform.position), 0, 1) > eff)
+                                {
+                                    eff = Mathf.Clamp(1 / Vector2.Distance(transform.position, food.gameObject.transform.position), 0, 1);
+                                }
+                            }
+                            if (distBefteenActAndRec <= el.sensivity * eff)
+                            {
+                                if (!el.isDeactivator)
+                                    affected.Add(act);
+                                else
+                                    deactivated.Add(act);
+                            }
+                        }
+                        break;
                     default:
                         Debug.Log("Unknown receptor type!" + el.type);
-                    break;
+                        break;
                 }
             }
         }
@@ -344,11 +441,13 @@ public class BacteriaScript : MonoBehaviour
                         {
                             foreach (var foodScr in FoodMarker.foodScripts)
                             {
+                                if (foodScr.source != FoodSource.plant)
+                                    continue;
                                 if (Vector2.Distance(transform.position, foodScr.gameObject.transform.position) < 1 && !foodScr.isEatten)
                                 {
-                                    foodLevel = Mathf.Clamp(foodLevel + 20, 0, foodMax);
+                                    foodLevel = Mathf.Clamp(foodLevel + foodScr.nutrients, 0, foodMax);
                                     foodScr.isEatten = true;
-                                    stats.foodSum += foodLevel + 20;
+                                    stats.foodSum += foodLevel + foodScr.nutrients;
                                     Destroy(foodScr.gameObject);
                                 }
                             }
@@ -356,6 +455,18 @@ public class BacteriaScript : MonoBehaviour
                         break;
                     case ActionType.attack:
                         {
+                            foreach (var foodScr in FoodMarker.foodScripts)
+                            {
+                                if (foodScr.source != FoodSource.meat)
+                                    continue;
+                                if (Vector2.Distance(transform.position, foodScr.gameObject.transform.position) < 0.5f && !foodScr.isEatten)
+                                {
+                                    foodLevel = Mathf.Clamp(foodLevel + foodScr.nutrients, 0, foodMax);
+                                    foodScr.isEatten = true;
+                                    stats.bitesSum += foodLevel + foodScr.nutrients;
+                                    Destroy(foodScr.gameObject);
+                                }
+                            }
                             foreach (var bactScript in bacteriaScripts)
                             {
                                 if (bactScript != this && Vector2.Distance(transform.position, bactScript.gameObject.transform.position) < 1)
@@ -364,9 +475,10 @@ public class BacteriaScript : MonoBehaviour
                                     {
                                         timeToLiveActual = -10;
                                     }
-                                    foodLevel = Mathf.Clamp(bactScript.foodLevel >= 20 ? (foodLevel + 20) : foodLevel + bactScript.foodLevel, 0, foodMax);
-                                    stats.bitesSum += bactScript.foodLevel >= 20 ? 20 : bactScript.foodLevel;
-                                    bactScript.foodLevel -= 20;
+                                    float biteQuality = Random.Range(5, 20f);
+                                    foodLevel = Mathf.Clamp(bactScript.foodLevel >= biteQuality ? (foodLevel + biteQuality) : foodLevel + bactScript.foodLevel, 0, foodMax);
+                                    stats.bitesSum += bactScript.foodLevel >= biteQuality ? biteQuality : bactScript.foodLevel;
+                                    bactScript.foodLevel -= biteQuality;
                                 }
                             }
                         }
@@ -375,9 +487,9 @@ public class BacteriaScript : MonoBehaviour
                         {
                             foreach (var bactScript in bacteriaScripts)
                             {
-                                if (bactScript != this && Vector2.Distance(transform.position, bactScript.gameObject.transform.position) < 1)
+                                if (bactScript != this && Vector2.Distance(transform.position, bactScript.gameObject.transform.position) < 0.5f)
                                 {
-                                    bactScript.gameObject.transform.position += (bactScript.gameObject.transform.position - transform.position).normalized * Time.deltaTime * 10;
+                                    bactScript.gameObject.transform.position += (bactScript.gameObject.transform.position - transform.position).normalized * Time.deltaTime;
                                 }
                             }
                         }
@@ -392,7 +504,7 @@ public class BacteriaScript : MonoBehaviour
                         {
                             foreach (var bactScript in bacteriaScripts)
                             {
-                                if (bactScript != this && !tied.Contains(bactScript.gameObject)  &&
+                                if (bactScript != this && !tied.Contains(bactScript.gameObject) &&
                                     Vector2.Distance(transform.position, bactScript.gameObject.transform.position) < 0.5f)
                                 {
                                     tied.Add(bactScript.gameObject);
@@ -453,7 +565,7 @@ public class BacteriaScript : MonoBehaviour
                                 {
                                     curr.GetComponent<SpriteRenderer>().color = new Color(
                                         Mathf.Clamp(GetComponent<SpriteRenderer>().color.r + Random.Range(-0.15f, 0.15f), 0, 1),
-                                        Mathf.Clamp(GetComponent<SpriteRenderer>().color.g + Random.Range(-0.15f, 0.15f), 0, 1), 
+                                        Mathf.Clamp(GetComponent<SpriteRenderer>().color.g + Random.Range(-0.15f, 0.15f), 0, 1),
                                         Mathf.Clamp(GetComponent<SpriteRenderer>().color.b + Random.Range(-0.15f, 0.15f), 0, 1));
                                     int typeOfMut = Random.Range(0, 6);
                                     switch (typeOfMut)
@@ -503,23 +615,47 @@ public class BacteriaScript : MonoBehaviour
                             }
                         }
                         break;
+                    case ActionType.pickMeat:
+                        {
+                            foreach (var foodScr in FoodMarker.foodScripts)
+                            {
+                                if (foodScr.source != FoodSource.meat)
+                                    continue;
+                                if (Vector2.Distance(transform.position, foodScr.gameObject.transform.position) < 1 && !foodScr.isEatten)
+                                {
+                                    foodLevel = Mathf.Clamp(foodLevel + foodScr.nutrients, 0, foodMax);
+                                    foodScr.isEatten = true;
+                                    stats.bitesSum += foodLevel + foodScr.nutrients;
+                                    Destroy(foodScr.gameObject);
+                                }
+                            }
+                        }
+                        break;
+                    case ActionType.absorbRot:
+                        {
+                            foreach (var foodScr in FoodMarker.foodScripts)
+                            {
+                                if (foodScr.source != FoodSource.rot)
+                                    continue;
+                                if (Vector2.Distance(transform.position, foodScr.gameObject.transform.position) < 1 && !foodScr.isEatten)
+                                {
+                                    foodLevel = Mathf.Clamp(foodLevel + foodScr.nutrients, 0, foodMax);
+                                    foodScr.isEatten = true;
+                                    stats.foodSum += foodLevel + foodScr.nutrients;
+                                    Destroy(foodScr.gameObject);
+                                }
+                            }
+                        }
+                        break;
+                    case ActionType.hybernate:
+                        {
+                            hybernation += 1;
+                        }
+                        break;
                     default:
                         Debug.Log("Unknown action type!" + aff.type);
                         break;
                 }
-            }
-        }
-        transform.position = new Vector3(Mathf.Clamp(transform.position.x, -9, 9), Mathf.Clamp(transform.position.y, -2.5f, 5), 0);
-        for (int i = 0; i < tied.Count; ++i)
-        {
-            if (tied[i] == null)
-            {
-                tied.RemoveAt(i--);
-                continue;
-            }
-            if (Vector2.Distance(transform.position, tied[i].transform.position) > 0.5f)
-            {
-                tied[i].transform.position += (transform.position - tied[i].transform.position) + (transform.position - tied[i].transform.position).normalized * 0.5f;
             }
         }
     }
@@ -535,7 +671,8 @@ public class BacteriaScript : MonoBehaviour
 
 public enum ReceptorType
 {
-    constant, foodNear, foodFullness, bacteriaNear, leftRightRandom, sideFood, sideBacteria, edgeNear, wait5
+    constant, foodNear, foodFullness, bacteriaNear, leftRightRandom, sideFood, sideBacteria, edgeNear, wait5,
+    plantNear, meatNear, rotNear
 }
 
 public struct Receptor
@@ -566,7 +703,7 @@ public struct Receptor
 public enum ActionType
 {
     move, eat, split, rotateLeft, rotateRight, photosynt, attack,
-    bazinga, tie, makePoison
+    bazinga, tie, makePoison, pickMeat, absorbRot, hybernate
 }
 
 public struct Action

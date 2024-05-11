@@ -9,7 +9,7 @@ public class ModuleShower : MonoBehaviour
     [SerializeField] GameObject backGround;
     [SerializeField] GameObject circlePrefab;
     [SerializeField] GameObject info;
-    const float mod = 75;
+    const float mod = 60;
     public void Clear()
     {
         foreach (var ch in transform.GetComponentsInChildren<Transform>())
@@ -66,6 +66,15 @@ public class ModuleShower : MonoBehaviour
                 case ActionType.tie:
                     str = "t";
                     break;
+                case ActionType.absorbRot:
+                    str = "aR";
+                    break;
+                case ActionType.hybernate:
+                    str = "h";
+                    break;
+                case ActionType.pickMeat:
+                    str = "PM";
+                    break;
                 default:
                     str = ((int)el.type).ToString();
                     break;
@@ -112,6 +121,15 @@ public class ModuleShower : MonoBehaviour
                     break;
                 case ReceptorType.wait5:
                     str = "w5";
+                    break;
+                case ReceptorType.plantNear:
+                    str = "pN";
+                    break;
+                case ReceptorType.meatNear:
+                    str = "mN";
+                    break;
+                case ReceptorType.rotNear:
+                    str = "rN";
                     break;
                 default:
                     str = ((int)el.type).ToString();

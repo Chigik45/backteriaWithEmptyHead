@@ -43,7 +43,8 @@ public class ThingSpawn : MonoBehaviour
         if (bef < 0)
         {
             bef = 0.1f;
-            Instantiate(foodPrefab, new Vector3(Random.Range(-9f, 9), Random.Range(-2.5f, 5), 0), Quaternion.identity);
+            FoodMarker foodMarker = Instantiate(foodPrefab, new Vector3(Random.Range(-9f, 9), Random.Range(-2.5f, 5), 0), Quaternion.identity).GetComponent<FoodMarker>();
+            foodMarker.ChangeSource(FoodSource.plant);
         }
     }
 }
